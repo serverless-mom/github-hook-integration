@@ -1,0 +1,44 @@
+---
+    name: Run Checkly Checks
+    on:
+      push:
+        branches:
+          - main
+    jobs:
+      run-checks:
+        runs-on: ubuntu-latest
+        steps:
+          - name: Checkout code
+            uses: actions/checkout@v3
+          - name: Set up Node.js
+            uses: actions/setup-node@v3
+            with:
+              node-version-file: .nvmrc
+          - name: Restore or cache node_modules
+            id: cache-node-modules
+            uses: actions/cache@v3
+            with:
+              path: node_modules
+              key: node-modules-${{ hashFiles('package-lock.json') }}
+          - name: Install dependencies
+            if: steps.cache-node-modules.outputs.cache-hit != 'true'
+            run: npm ci
+          - name: Install Checkly CLI
+            run: npm install -g checkly
+          - name: Run Checkly Checks
+            run: checkly test --config checkly.config.ts
+            env:
+              CHECKLY_API_KEY: ${{ secrets.CHECKLY_API_KEY }}
+              CHECKLY_ACCOUNT_ID: ${{ secrets.CHECKLY_ACCOUNT_ID }}
+          - name: Create summary
+            id: create-summary
+            run: cat checkly-github-report.md > $GITHUB_STEP_SUMMARY
+          - name: Deploy checks
+            id: deploy-checks
+            # if: steps.run-checks.outcome == 'success' &&
+            #  github.event.deployment_status.environment == 'Production'
+            run: npx checkly deploy --force
+            env:
+              CHECKLY_API_KEY: ${{ secrets.CHECKLY_API_KEY }}
+              CHECKLY_ACCOUNT_ID: ${{ secrets.CHECKLY_ACCOUNT_ID }}
+    
